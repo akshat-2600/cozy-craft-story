@@ -1,8 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, ShoppingBag, Search, User, Heart } from "lucide-react";
+import { Menu, X, ShoppingBag, Search, User, Heart, LogOut, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navLinks = [
   { name: "Home", href: "/" },
@@ -14,6 +23,12 @@ const navLinks = [
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const { totalItems } = useCart();
+  const { user, isAdmin, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
@@ -41,34 +56,71 @@ export function Navbar() {
 
           {/* Desktop Actions */}
           <div className="hidden lg:flex lg:items-center lg:gap-2">
-            <Button variant="ghost" size="icon" aria-label="Search">
-              <Search className="h-5 w-5" />
-            </Button>
             <Button variant="ghost" size="icon" aria-label="Wishlist">
               <Heart className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Cart" className="relative">
-              <ShoppingBag className="h-5 w-5" />
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-                0
-              </span>
-            </Button>
-            <Link to="/auth">
-              <Button variant="outline" size="sm" className="ml-2">
-                <User className="mr-2 h-4 w-4" />
-                Login
+            <Link to="/cart">
+              <Button variant="ghost" size="icon" aria-label="Cart" className="relative">
+                <ShoppingBag className="h-5 w-5" />
+                {totalItems > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
+                    {totalItems}
+                  </span>
+                )}
               </Button>
             </Link>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="ml-2">
+                    <User className="mr-2 h-4 w-4" />
+                    Account
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link to="/orders">My Orders</Link>
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin/dashboard">
+                          <Settings className="mr-2 h-4 w-4" />
+                          Admin Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link to="/auth">
+                <Button variant="outline" size="sm" className="ml-2">
+                  <User className="mr-2 h-4 w-4" />
+                  Login
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex items-center gap-2 lg:hidden">
-            <Button variant="ghost" size="icon" aria-label="Cart" className="relative">
-              <ShoppingBag className="h-5 w-5" />
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-                0
-              </span>
-            </Button>
+            <Link to="/cart">
+              <Button variant="ghost" size="icon" aria-label="Cart" className="relative">
+                <ShoppingBag className="h-5 w-5" />
+                {totalItems > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
+                    {totalItems}
+                  </span>
+                )}
+              </Button>
+            </Link>
             <Button
               variant="ghost"
               size="icon"
@@ -99,18 +151,36 @@ export function Navbar() {
               </Link>
             ))}
             <div className="mt-2 flex items-center gap-2 px-4">
-              <Button variant="ghost" size="icon" aria-label="Search">
-                <Search className="h-5 w-5" />
-              </Button>
               <Button variant="ghost" size="icon" aria-label="Wishlist">
                 <Heart className="h-5 w-5" />
               </Button>
-              <Link to="/auth" className="ml-auto">
-                <Button variant="outline" size="sm">
-                  <User className="mr-2 h-4 w-4" />
-                  Login
-                </Button>
-              </Link>
+              {user ? (
+                <>
+                  <Link to="/orders" onClick={() => setIsOpen(false)} className="ml-auto">
+                    <Button variant="outline" size="sm">
+                      <User className="mr-2 h-4 w-4" />
+                      My Orders
+                    </Button>
+                  </Link>
+                  {isAdmin && (
+                    <Link to="/admin/dashboard" onClick={() => setIsOpen(false)}>
+                      <Button variant="outline" size="sm">
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <Link to="/auth" onClick={() => setIsOpen(false)} className="ml-auto">
+                  <Button variant="outline" size="sm">
+                    <User className="mr-2 h-4 w-4" />
+                    Login
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
