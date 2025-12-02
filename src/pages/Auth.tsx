@@ -1,37 +1,61 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Auth = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const { signIn, signUp } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loginData, setLoginData] = useState({ email: "", password: "" });
+  const [signupData, setSignupData] = useState({ email: "", password: "", fullName: "" });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    toast({
-      title: "Login functionality",
-      description: "Backend integration required. Connect Lovable Cloud to enable authentication.",
-    });
-    setIsLoading(false);
+    try {
+      await signIn(loginData.email, loginData.password);
+      toast({
+        title: "Welcome back!",
+        description: "You've been successfully logged in.",
+      });
+      navigate("/shop");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Invalid credentials",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    toast({
-      title: "Signup functionality",
-      description: "Backend integration required. Connect Lovable Cloud to enable authentication.",
-    });
-    setIsLoading(false);
+    try {
+      await signUp(signupData.email, signupData.password, signupData.fullName);
+      toast({
+        title: "Account created!",
+        description: "You can now sign in with your credentials.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create account",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -82,6 +106,8 @@ const Auth = () => {
                       type="email"
                       placeholder="you@example.com"
                       className="pl-10"
+                      value={loginData.email}
+                      onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                       required
                     />
                   </div>
@@ -103,6 +129,8 @@ const Auth = () => {
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       className="pl-10 pr-10"
+                      value={loginData.password}
+                      onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                       required
                     />
                     <button
@@ -132,6 +160,8 @@ const Auth = () => {
                       type="text"
                       placeholder="John Doe"
                       className="pl-10"
+                      value={signupData.fullName}
+                      onChange={(e) => setSignupData({ ...signupData, fullName: e.target.value })}
                       required
                     />
                   </div>
@@ -145,6 +175,8 @@ const Auth = () => {
                       type="email"
                       placeholder="you@example.com"
                       className="pl-10"
+                      value={signupData.email}
+                      onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
                       required
                     />
                   </div>
@@ -158,6 +190,8 @@ const Auth = () => {
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       className="pl-10 pr-10"
+                      value={signupData.password}
+                      onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
                       required
                     />
                     <button

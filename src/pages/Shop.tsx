@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCart } from "@/contexts/CartContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const categories = [
   { slug: "all", name: "All Products" },
@@ -48,12 +50,23 @@ const Shop = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [wishlist, setWishlist] = useState<number[]>([]);
+  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const { addItem } = useCart();
 
   const activeCategory = searchParams.get("category") || "all";
   const sortBy = searchParams.get("sort") || "featured";
 
-  const filteredProducts = allProducts
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    const { data } = await supabase.from("products").select("*").eq("in_stock", true);
+    if (data) setProducts(data);
+  };
+
+  const filteredProducts = products
     .filter((product) => {
       if (activeCategory !== "all" && product.category !== activeCategory) return false;
       if (searchQuery && !product.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -63,14 +76,24 @@ const Shop = () => {
       switch (sortBy) {
         case "price-low": return a.price - b.price;
         case "price-high": return b.price - a.price;
-        case "rating": return b.rating - a.rating;
-        case "newest": return b.id - a.id;
+        case "rating": return (b.rating || 0) - (a.rating || 0);
+        case "newest": return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         default: return 0;
       }
     });
 
-  const toggleWishlist = (id: number) => {
+  const toggleWishlist = (id: string) => {
     setWishlist((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+  };
+
+  const handleAddToCart = (product: any) => {
+    addItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      image_url: product.image_url || "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&h=500&fit=crop",
+    });
   };
 
   return (
@@ -197,11 +220,11 @@ const Shop = () => {
                     style={{ animationDelay: `${index * 0.05}s` }}
                   >
                     <div className="relative aspect-square image-zoom">
-                      <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                      <img src={product.image_url || "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&h=500&fit=crop"} alt={product.name} className="h-full w-full object-cover" />
                       <div className="absolute left-3 top-3 flex flex-col gap-2">
-                        {product.isNew && <span className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">New</span>}
-                        {product.isBestseller && <span className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">Bestseller</span>}
-                        {product.originalPrice && <span className="rounded-full bg-destructive px-3 py-1 text-xs font-medium text-destructive-foreground">Sale</span>}
+                        {product.badge && <span className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">{product.badge}</span>}
+                        {product.featured && <span className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">Featured</span>}
+                        {product.original_price && <span className="rounded-full bg-destructive px-3 py-1 text-xs font-medium text-destructive-foreground">Sale</span>}
                       </div>
                       <button
                         onClick={() => toggleWishlist(product.id)}
@@ -210,7 +233,7 @@ const Shop = () => {
                         <Heart className={cn("h-4 w-4 transition-colors", wishlist.includes(product.id) ? "fill-destructive text-destructive" : "text-muted-foreground")} />
                       </button>
                       <div className="absolute bottom-3 left-3 right-3 opacity-0 translate-y-4 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
-                        <Button className="w-full" size="sm">
+                        <Button className="w-full" size="sm" onClick={() => handleAddToCart(product)}>
                           <ShoppingBag className="mr-2 h-4 w-4" />
                           Add to Cart
                         </Button>
@@ -225,14 +248,16 @@ const Shop = () => {
                           {product.name}
                         </h3>
                       </Link>
-                      <div className="mb-3 flex items-center gap-2">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        <span className="font-body text-sm font-medium text-foreground">{product.rating}</span>
-                        <span className="font-body text-xs text-muted-foreground">({product.reviews})</span>
-                      </div>
+                      {product.rating && (
+                        <div className="mb-3 flex items-center gap-2">
+                          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                          <span className="font-body text-sm font-medium text-foreground">{product.rating}</span>
+                          {product.review_count && <span className="font-body text-xs text-muted-foreground">({product.review_count})</span>}
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <span className="font-display text-lg font-bold text-foreground">{formatPrice(product.price)}</span>
-                        {product.originalPrice && <span className="font-body text-sm text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>}
+                        {product.original_price && <span className="font-body text-sm text-muted-foreground line-through">{formatPrice(product.original_price)}</span>}
                       </div>
                     </div>
                   </div>
