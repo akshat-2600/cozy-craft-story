@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useSearchParams } from "react-router-dom";
+import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -20,32 +21,42 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ExternalLink, CheckCircle, XCircle } from "lucide-react";
+import {
+  Search,
+  ExternalLink,
+  CheckCircle,
+  XCircle,
+  Eye,
+  Truck,
+} from "lucide-react";
 import { format } from "date-fns";
 
 function getStatusColor(status: string) {
   const colors: Record<string, string> = {
-    pending_payment: "bg-amber-100 text-amber-800",
-    payment_uploaded: "bg-blue-100 text-blue-800",
-    payment_verified: "bg-indigo-100 text-indigo-800",
-    approved: "bg-green-100 text-green-800",
-    rejected: "bg-red-100 text-red-800",
-    processing: "bg-purple-100 text-purple-800",
-    shipped: "bg-cyan-100 text-cyan-800",
-    delivered: "bg-emerald-100 text-emerald-800",
-    cancelled: "bg-gray-100 text-gray-800",
+    pending_payment: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+    payment_uploaded: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+    payment_verified: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400",
+    approved: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    rejected: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    processing: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+    shipped: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400",
+    delivered: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+    cancelled: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
   };
   return colors[status] || "bg-gray-100 text-gray-800";
 }
 
 const AdminOrders = () => {
-  const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [trackingForm, setTrackingForm] = useState({
     status: "",
     description: "",
@@ -54,13 +65,11 @@ const AdminOrders = () => {
     tracking_number: "",
   });
 
+  const activeTab = searchParams.get("tab") || "all";
+
   useEffect(() => {
-    if (!user || !isAdmin) {
-      navigate("/admin/login");
-      return;
-    }
     fetchOrders();
-  }, [user, isAdmin]);
+  }, []);
 
   const fetchOrders = async () => {
     const { data, error } = await supabase
@@ -71,6 +80,44 @@ const AdminOrders = () => {
     if (!error && data) {
       setOrders(data);
     }
+  };
+
+  const filterOrders = (orders: any[]) => {
+    let filtered = orders;
+
+    // Filter by tab
+    switch (activeTab) {
+      case "pending":
+        filtered = filtered.filter((o) =>
+          ["payment_uploaded", "payment_verified"].includes(o.status)
+        );
+        break;
+      case "approved":
+        filtered = filtered.filter((o) =>
+          ["approved", "processing", "shipped"].includes(o.status)
+        );
+        break;
+      case "rejected":
+        filtered = filtered.filter((o) => o.status === "rejected");
+        break;
+      case "completed":
+        filtered = filtered.filter((o) => o.status === "delivered");
+        break;
+    }
+
+    // Filter by search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (o) =>
+          o.id.toLowerCase().includes(query) ||
+          o.profiles?.full_name?.toLowerCase().includes(query) ||
+          o.profiles?.email?.toLowerCase().includes(query) ||
+          o.shipping_phone?.includes(query)
+      );
+    }
+
+    return filtered;
   };
 
   const verifyPayment = async (orderId: string) => {
@@ -84,11 +131,7 @@ const AdminOrders = () => {
       .eq("id", orderId);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
 
@@ -103,15 +146,10 @@ const AdminOrders = () => {
       .eq("id", orderId);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
 
-    // Create initial tracking entry
     await supabase.from("order_tracking").insert({
       order_id: orderId,
       status: "Order Approved",
@@ -133,11 +171,7 @@ const AdminOrders = () => {
       .eq("id", orderId);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
 
@@ -155,29 +189,25 @@ const AdminOrders = () => {
     });
 
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
 
-    // Update order status if needed
-    if (trackingForm.status === "Shipped") {
+    // Update order status
+    let newStatus = selectedOrder.status;
+    if (trackingForm.status === "Processing") newStatus = "processing";
+    else if (trackingForm.status === "Shipped") newStatus = "shipped";
+    else if (trackingForm.status === "Delivered") newStatus = "delivered";
+
+    if (newStatus !== selectedOrder.status) {
       await supabase
         .from("orders")
-        .update({ status: "shipped" })
-        .eq("id", selectedOrder.id);
-    } else if (trackingForm.status === "Delivered") {
-      await supabase
-        .from("orders")
-        .update({ status: "delivered" })
+        .update({ status: newStatus })
         .eq("id", selectedOrder.id);
     }
 
     toast({ title: "Tracking updated successfully" });
-    setDialogOpen(false);
+    setTrackingDialogOpen(false);
     setTrackingForm({
       status: "",
       description: "",
@@ -188,140 +218,200 @@ const AdminOrders = () => {
     fetchOrders();
   };
 
-  if (!user || !isAdmin) {
-    return null;
-  }
+  const filteredOrders = filterOrders(orders);
 
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto flex items-center px-4 py-4">
-          <Link to="/admin/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <h1 className="ml-4 font-display text-2xl font-bold">Manage Orders</h1>
+  const OrderCard = ({ order }: { order: any }) => (
+    <div className="rounded-xl bg-card p-5 shadow-soft">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-body text-sm font-medium">
+            Order #{order.id.slice(0, 8)}
+          </p>
+          <p className="font-body text-xs text-muted-foreground">
+            {format(new Date(order.created_at), "PPp")}
+          </p>
+          <p className="mt-1 font-body text-sm">
+            <span className="text-muted-foreground">Customer:</span>{" "}
+            {order.profiles?.full_name || order.profiles?.email || "N/A"}
+          </p>
         </div>
-      </header>
+        <Badge className={getStatusColor(order.status)}>
+          {order.status.replace(/_/g, " ").toUpperCase()}
+        </Badge>
+      </div>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="space-y-4">
-          {orders.map((order) => (
-            <div key={order.id} className="rounded-xl bg-card p-6 shadow-soft">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="font-body text-sm font-medium">
-                    Order #{order.id.slice(0, 8)}
-                  </p>
-                  <p className="font-body text-sm text-muted-foreground">
-                    {format(new Date(order.created_at), "PPp")}
-                  </p>
-                  <p className="mt-1 font-body text-sm">
-                    Customer: {order.profiles?.full_name || order.profiles?.email}
-                  </p>
-                </div>
-                <Badge className={getStatusColor(order.status)}>
-                  {order.status.replace(/_/g, " ").toUpperCase()}
-                </Badge>
-              </div>
-
-              <div className="mb-4">
-                <p className="mb-2 font-body text-sm font-medium">Order Items:</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {order.order_items.map((item: any, idx: number) => (
-                    <div key={idx} className="rounded-lg bg-muted/50 p-3">
-                      <p className="font-body text-sm font-medium">{item.product_name}</p>
-                      <p className="font-body text-xs text-muted-foreground">
-                        Qty: {item.quantity} × ₹{item.product_price.toLocaleString("en-IN")}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="font-body text-xs text-muted-foreground">Shipping Address</p>
-                  <p className="font-body text-sm">
-                    {order.shipping_address}, {order.shipping_city} - {order.shipping_zip}
-                  </p>
-                  <p className="font-body text-sm">Phone: {order.shipping_phone}</p>
-                </div>
-                <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="font-body text-xs text-muted-foreground">Total Amount</p>
-                  <p className="font-display text-lg font-bold">
-                    ₹{order.total_amount.toLocaleString("en-IN")}
-                  </p>
-                </div>
-              </div>
-
-              {order.payment_screenshot_url && (
-                <div className="mb-4">
-                  <a
-                    href={order.payment_screenshot_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 font-body text-sm text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    View Payment Screenshot
-                  </a>
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                {order.status === "payment_uploaded" && (
-                  <>
-                    <Button size="sm" onClick={() => verifyPayment(order.id)}>
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Verify Payment
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => rejectOrder(order.id)}
-                    >
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Reject
-                    </Button>
-                  </>
-                )}
-                {order.status === "payment_verified" && (
-                  <Button size="sm" onClick={() => approveOrder(order.id)}>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Approve Order
-                  </Button>
-                )}
-                {["approved", "processing", "shipped"].includes(order.status) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedOrder(order);
-                      setDialogOpen(true);
-                    }}
-                  >
-                    Update Tracking
-                  </Button>
-                )}
-              </div>
+      {/* Order Items */}
+      <div className="mb-4">
+        <p className="mb-2 font-body text-xs font-medium text-muted-foreground">
+          ORDER ITEMS
+        </p>
+        <div className="space-y-2">
+          {order.order_items.map((item: any, idx: number) => (
+            <div
+              key={idx}
+              className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2"
+            >
+              <span className="font-body text-sm">{item.product_name}</span>
+              <span className="font-body text-sm text-muted-foreground">
+                {item.quantity} × ₹{item.product_price.toLocaleString("en-IN")}
+              </span>
             </div>
           ))}
         </div>
-      </main>
+      </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Shipping & Total */}
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg bg-muted/50 p-3">
+          <p className="font-body text-xs text-muted-foreground">SHIPPING</p>
+          <p className="font-body text-sm">
+            {order.shipping_address}, {order.shipping_city} - {order.shipping_zip}
+          </p>
+          <p className="font-body text-sm">📞 {order.shipping_phone}</p>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-3">
+          <p className="font-body text-xs text-muted-foreground">TOTAL</p>
+          <p className="font-display text-xl font-bold">
+            ₹{order.total_amount.toLocaleString("en-IN")}
+          </p>
+        </div>
+      </div>
+
+      {/* Payment Screenshot */}
+      {order.payment_screenshot_url && (
+        <div className="mb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedOrder(order);
+              setPreviewDialogOpen(true);
+            }}
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            View Payment Screenshot
+          </Button>
+        </div>
+      )}
+
+      {/* Rejection Reason */}
+      {order.rejection_reason && (
+        <div className="mb-4 rounded-lg bg-red-50 p-3 dark:bg-red-900/20">
+          <p className="font-body text-xs text-red-600 dark:text-red-400">
+            REJECTION REASON
+          </p>
+          <p className="font-body text-sm text-red-800 dark:text-red-300">
+            {order.rejection_reason}
+          </p>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex flex-wrap gap-2">
+        {order.status === "payment_uploaded" && (
+          <>
+            <Button size="sm" onClick={() => verifyPayment(order.id)}>
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Verify Payment
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => rejectOrder(order.id)}
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              Reject
+            </Button>
+          </>
+        )}
+        {order.status === "payment_verified" && (
+          <>
+            <Button size="sm" onClick={() => approveOrder(order.id)}>
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Approve Order
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => rejectOrder(order.id)}
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              Reject
+            </Button>
+          </>
+        )}
+        {["approved", "processing", "shipped"].includes(order.status) && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setSelectedOrder(order);
+              setTrackingDialogOpen(true);
+            }}
+          >
+            <Truck className="mr-2 h-4 w-4" />
+            Update Tracking
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <AdminLayout title="Manage Orders">
+      {/* Search */}
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search by order ID, customer name, email, or phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setSearchParams({ tab: value })}
+      >
+        <TabsList className="mb-6">
+          <TabsTrigger value="all">All Orders</TabsTrigger>
+          <TabsTrigger value="pending">Pending</TabsTrigger>
+          <TabsTrigger value="approved">Approved</TabsTrigger>
+          <TabsTrigger value="rejected">Rejected</TabsTrigger>
+          <TabsTrigger value="completed">Completed</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab} className="space-y-4">
+          {filteredOrders.length === 0 ? (
+            <div className="rounded-xl bg-card p-8 text-center shadow-soft">
+              <p className="font-body text-muted-foreground">No orders found</p>
+            </div>
+          ) : (
+            filteredOrders.map((order) => (
+              <OrderCard key={order.id} order={order} />
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Tracking Dialog */}
+      <Dialog open={trackingDialogOpen} onOpenChange={setTrackingDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Update Tracking</DialogTitle>
           </DialogHeader>
           <form onSubmit={updateTracking} className="space-y-4">
             <div>
-              <Label htmlFor="status">Status</Label>
+              <Label>Status</Label>
               <Select
                 value={trackingForm.status}
-                onValueChange={(value) => setTrackingForm({ ...trackingForm, status: value })}
+                onValueChange={(value) =>
+                  setTrackingForm({ ...trackingForm, status: value })
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
@@ -335,9 +425,8 @@ const AdminOrders = () => {
               </Select>
             </div>
             <div>
-              <Label htmlFor="description">Description</Label>
+              <Label>Description</Label>
               <Textarea
-                id="description"
                 value={trackingForm.description}
                 onChange={(e) =>
                   setTrackingForm({ ...trackingForm, description: e.target.value })
@@ -346,18 +435,18 @@ const AdminOrders = () => {
               />
             </div>
             <div>
-              <Label htmlFor="location">Location</Label>
+              <Label>Location</Label>
               <Input
-                id="location"
                 value={trackingForm.location}
-                onChange={(e) => setTrackingForm({ ...trackingForm, location: e.target.value })}
+                onChange={(e) =>
+                  setTrackingForm({ ...trackingForm, location: e.target.value })
+                }
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <Label htmlFor="carrier">Carrier</Label>
+                <Label>Carrier</Label>
                 <Input
-                  id="carrier"
                   value={trackingForm.carrier}
                   onChange={(e) =>
                     setTrackingForm({ ...trackingForm, carrier: e.target.value })
@@ -366,12 +455,14 @@ const AdminOrders = () => {
                 />
               </div>
               <div>
-                <Label htmlFor="tracking_number">Tracking Number</Label>
+                <Label>Tracking Number</Label>
                 <Input
-                  id="tracking_number"
                   value={trackingForm.tracking_number}
                   onChange={(e) =>
-                    setTrackingForm({ ...trackingForm, tracking_number: e.target.value })
+                    setTrackingForm({
+                      ...trackingForm,
+                      tracking_number: e.target.value,
+                    })
                   }
                 />
               </div>
@@ -382,7 +473,47 @@ const AdminOrders = () => {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* PDF Preview Dialog */}
+      <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Payment Screenshot</DialogTitle>
+          </DialogHeader>
+          <div className="relative min-h-[60vh]">
+            {selectedOrder?.payment_screenshot_url && (
+              <>
+                {selectedOrder.payment_screenshot_url.toLowerCase().endsWith(".pdf") ? (
+                  <iframe
+                    src={selectedOrder.payment_screenshot_url}
+                    className="h-[60vh] w-full rounded-lg border"
+                    title="Payment Screenshot"
+                  />
+                ) : (
+                  <img
+                    src={selectedOrder.payment_screenshot_url}
+                    alt="Payment Screenshot"
+                    className="mx-auto max-h-[60vh] rounded-lg object-contain"
+                  />
+                )}
+                <div className="mt-4 flex justify-center">
+                  <a
+                    href={selectedOrder.payment_screenshot_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Open in New Tab
+                    </Button>
+                  </a>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </AdminLayout>
   );
 };
 

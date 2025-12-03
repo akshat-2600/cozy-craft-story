@@ -1,35 +1,32 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
+import { AdminLayout } from "@/components/admin/AdminLayout";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Package,
   ShoppingBag,
-  Users,
   DollarSign,
-  LogOut,
-  Settings,
-  FileText,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Truck,
 } from "lucide-react";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { user, isAdmin, signOut } = useAuth();
   const [stats, setStats] = useState({
     totalOrders: 0,
-    pendingOrders: 0,
+    pendingVerification: 0,
+    approvedOrders: 0,
+    rejectedOrders: 0,
+    completedOrders: 0,
     totalProducts: 0,
     totalRevenue: 0,
   });
 
   useEffect(() => {
-    if (!user || !isAdmin) {
-      navigate("/admin/login");
-      return;
-    }
     fetchStats();
-  }, [user, isAdmin]);
+  }, []);
 
   const fetchStats = async () => {
     const [ordersRes, productsRes, revenueRes] = await Promise.all([
@@ -38,113 +35,166 @@ const AdminDashboard = () => {
       supabase
         .from("orders")
         .select("total_amount")
-        .in("status", ["delivered", "shipped"]),
+        .in("status", ["delivered", "shipped", "approved", "processing"]),
     ]);
 
-    const pendingCount =
-      ordersRes.data?.filter((o) => o.status === "payment_uploaded").length || 0;
+    const orders = ordersRes.data || [];
+    const pendingVerification = orders.filter(
+      (o) => o.status === "payment_uploaded"
+    ).length;
+    const approvedOrders = orders.filter((o) =>
+      ["approved", "processing", "shipped"].includes(o.status)
+    ).length;
+    const rejectedOrders = orders.filter((o) => o.status === "rejected").length;
+    const completedOrders = orders.filter((o) => o.status === "delivered").length;
     const revenue =
       revenueRes.data?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
     setStats({
       totalOrders: ordersRes.count || 0,
-      pendingOrders: pendingCount,
+      pendingVerification,
+      approvedOrders,
+      rejectedOrders,
+      completedOrders,
       totalProducts: productsRes.count || 0,
       totalRevenue: revenue,
     });
   };
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate("/");
-  };
-
-  if (!user || !isAdmin) {
-    return null;
-  }
+  const statCards = [
+    {
+      label: "Total Orders",
+      value: stats.totalOrders,
+      icon: Package,
+      color: "text-primary",
+      bg: "bg-primary/10",
+    },
+    {
+      label: "Pending Verification",
+      value: stats.pendingVerification,
+      icon: Clock,
+      color: "text-amber-500",
+      bg: "bg-amber-500/10",
+      onClick: () => navigate("/admin/orders?tab=pending"),
+    },
+    {
+      label: "Approved Orders",
+      value: stats.approvedOrders,
+      icon: CheckCircle,
+      color: "text-green-500",
+      bg: "bg-green-500/10",
+      onClick: () => navigate("/admin/orders?tab=approved"),
+    },
+    {
+      label: "Rejected Orders",
+      value: stats.rejectedOrders,
+      icon: XCircle,
+      color: "text-red-500",
+      bg: "bg-red-500/10",
+      onClick: () => navigate("/admin/orders?tab=rejected"),
+    },
+    {
+      label: "Completed Orders",
+      value: stats.completedOrders,
+      icon: Truck,
+      color: "text-emerald-500",
+      bg: "bg-emerald-500/10",
+      onClick: () => navigate("/admin/orders?tab=completed"),
+    },
+    {
+      label: "Total Products",
+      value: stats.totalProducts,
+      icon: ShoppingBag,
+      color: "text-accent",
+      bg: "bg-accent/10",
+      onClick: () => navigate("/admin/products"),
+    },
+    {
+      label: "Total Revenue",
+      value: `₹${stats.totalRevenue.toLocaleString("en-IN")}`,
+      icon: DollarSign,
+      color: "text-green-600",
+      bg: "bg-green-600/10",
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          <h1 className="font-display text-2xl font-bold">Admin Dashboard</h1>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl bg-card p-6 shadow-soft">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-body text-sm text-muted-foreground">Total Orders</p>
-                <p className="mt-1 font-display text-3xl font-bold">{stats.totalOrders}</p>
-              </div>
-              <Package className="h-10 w-10 text-primary" />
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-card p-6 shadow-soft">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-body text-sm text-muted-foreground">Pending Orders</p>
-                <p className="mt-1 font-display text-3xl font-bold">{stats.pendingOrders}</p>
-              </div>
-              <FileText className="h-10 w-10 text-amber-500" />
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-card p-6 shadow-soft">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-body text-sm text-muted-foreground">Total Products</p>
-                <p className="mt-1 font-display text-3xl font-bold">{stats.totalProducts}</p>
-              </div>
-              <ShoppingBag className="h-10 w-10 text-accent" />
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-card p-6 shadow-soft">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-body text-sm text-muted-foreground">Total Revenue</p>
-                <p className="mt-1 font-display text-3xl font-bold">
-                  ₹{stats.totalRevenue.toLocaleString("en-IN")}
-                </p>
-              </div>
-              <DollarSign className="h-10 w-10 text-green-500" />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2">
-          <button
-            onClick={() => navigate("/admin/products")}
-            className="rounded-xl bg-card p-8 text-left shadow-soft transition-all hover:shadow-hover"
+    <AdminLayout title="Dashboard">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {statCards.map((card, idx) => (
+          <div
+            key={idx}
+            onClick={card.onClick}
+            className={`rounded-xl bg-card p-5 shadow-soft transition-all ${
+              card.onClick ? "cursor-pointer hover:shadow-hover" : ""
+            }`}
           >
-            <ShoppingBag className="mb-4 h-12 w-12 text-primary" />
-            <h2 className="mb-2 font-display text-2xl font-bold">Manage Products</h2>
-            <p className="font-body text-muted-foreground">
-              Add, edit, or remove products from your catalog
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-body text-sm text-muted-foreground">
+                  {card.label}
+                </p>
+                <p className="mt-1 font-display text-2xl font-bold">{card.value}</p>
+              </div>
+              <div className={`rounded-full p-3 ${card.bg}`}>
+                <card.icon className={`h-6 w-6 ${card.color}`} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mt-8">
+        <h2 className="mb-4 font-display text-lg font-semibold">Quick Actions</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <button
+            onClick={() => navigate("/admin/orders?tab=pending")}
+            className="flex items-center gap-4 rounded-xl bg-card p-5 text-left shadow-soft transition-all hover:shadow-hover"
+          >
+            <div className="rounded-full bg-amber-500/10 p-3">
+              <Clock className="h-6 w-6 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="font-display font-semibold">Verify Payments</h3>
+              <p className="font-body text-sm text-muted-foreground">
+                {stats.pendingVerification} orders waiting
+              </p>
+            </div>
           </button>
 
           <button
             onClick={() => navigate("/admin/orders")}
-            className="rounded-xl bg-card p-8 text-left shadow-soft transition-all hover:shadow-hover"
+            className="flex items-center gap-4 rounded-xl bg-card p-5 text-left shadow-soft transition-all hover:shadow-hover"
           >
-            <Package className="mb-4 h-12 w-12 text-primary" />
-            <h2 className="mb-2 font-display text-2xl font-bold">Manage Orders</h2>
-            <p className="font-body text-muted-foreground">
-              Verify payments, approve orders, and update tracking
-            </p>
+            <div className="rounded-full bg-primary/10 p-3">
+              <Package className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-display font-semibold">Manage Orders</h3>
+              <p className="font-body text-sm text-muted-foreground">
+                View and update all orders
+              </p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate("/admin/products")}
+            className="flex items-center gap-4 rounded-xl bg-card p-5 text-left shadow-soft transition-all hover:shadow-hover"
+          >
+            <div className="rounded-full bg-accent/10 p-3">
+              <ShoppingBag className="h-6 w-6 text-accent" />
+            </div>
+            <div>
+              <h3 className="font-display font-semibold">Manage Products</h3>
+              <p className="font-body text-sm text-muted-foreground">
+                Add, edit, or remove products
+              </p>
+            </div>
           </button>
         </div>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 };
 

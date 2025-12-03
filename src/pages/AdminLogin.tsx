@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,15 +6,23 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { signIn, isAdmin } = useAuth();
+  const { signIn, isAdmin, user, loading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Redirect if already logged in as admin
+  useEffect(() => {
+    if (!loading && user && isAdmin) {
+      navigate("/admin/dashboard");
+    }
+  }, [user, isAdmin, loading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,27 +31,37 @@ const AdminLogin = () => {
     try {
       await signIn(email, password);
       
-      // Check admin status
-      if (isAdmin) {
-        toast({
-          title: "Welcome back, Admin!",
-          description: "Redirecting to admin dashboard...",
-        });
-        navigate("/admin/dashboard");
-      } else {
-        toast({
-          title: "Access denied",
-          description: "You don't have admin privileges.",
-          variant: "destructive",
-        });
-      }
+      // Wait a moment for auth state to update, then check admin status
+      setTimeout(async () => {
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("role", "admin")
+          .maybeSingle();
+
+        if (roleData) {
+          toast({
+            title: "Welcome back, Admin!",
+            description: "Redirecting to admin dashboard...",
+          });
+          navigate("/admin/dashboard");
+        } else {
+          // Sign out if not admin
+          await supabase.auth.signOut();
+          toast({
+            title: "Access denied",
+            description: "You don't have admin privileges.",
+            variant: "destructive",
+          });
+        }
+        setIsLoading(false);
+      }, 500);
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Invalid credentials",
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
     }
   };
