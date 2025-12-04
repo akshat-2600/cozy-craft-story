@@ -53,6 +53,7 @@ const AdminOrders = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
@@ -68,36 +69,54 @@ const AdminOrders = () => {
   const activeTab = searchParams.get("tab") || "all";
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    if (user) {
+      fetchOrders();
+    }
+  }, [user]);
 
   const fetchOrders = async () => {
-    // Fetch orders with order items
-    const { data: ordersData, error: ordersError } = await supabase
-      .from("orders")
-      .select("*, order_items(*)")
-      .order("created_at", { ascending: false });
+    setLoading(true);
+    try {
+      // Fetch orders with order items
+      const { data: ordersData, error: ordersError } = await supabase
+        .from("orders")
+        .select("*, order_items(*)")
+        .order("created_at", { ascending: false });
 
-    if (ordersError || !ordersData) {
-      console.error("Error fetching orders:", ordersError);
-      return;
+      if (ordersError) {
+        console.error("Error fetching orders:", ordersError);
+        toast({ title: "Error loading orders", description: ordersError.message, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+
+      if (!ordersData || ordersData.length === 0) {
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch profiles for all unique user_ids
+      const userIds = [...new Set(ordersData.map((o) => o.user_id))];
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("id", userIds);
+
+      // Map profiles to orders
+      const profilesMap = new Map(profilesData?.map((p) => [p.id, p]) || []);
+      const ordersWithProfiles = ordersData.map((order) => ({
+        ...order,
+        profiles: profilesMap.get(order.user_id) || null,
+      }));
+
+      setOrders(ordersWithProfiles);
+    } catch (err) {
+      console.error("Error:", err);
+      toast({ title: "Error loading orders", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-
-    // Fetch profiles for all unique user_ids
-    const userIds = [...new Set(ordersData.map((o) => o.user_id))];
-    const { data: profilesData } = await supabase
-      .from("profiles")
-      .select("*")
-      .in("id", userIds);
-
-    // Map profiles to orders
-    const profilesMap = new Map(profilesData?.map((p) => [p.id, p]) || []);
-    const ordersWithProfiles = ordersData.map((order) => ({
-      ...order,
-      profiles: profilesMap.get(order.user_id) || null,
-    }));
-
-    setOrders(ordersWithProfiles);
   };
 
   const filterOrders = (orders: any[]) => {
@@ -404,7 +423,11 @@ const AdminOrders = () => {
         </TabsList>
 
         <TabsContent value={activeTab} className="space-y-4">
-          {filteredOrders.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center rounded-xl bg-card p-8 shadow-soft">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            </div>
+          ) : filteredOrders.length === 0 ? (
             <div className="rounded-xl bg-card p-8 text-center shadow-soft">
               <p className="font-body text-muted-foreground">No orders found</p>
             </div>
