@@ -72,14 +72,32 @@ const AdminOrders = () => {
   }, []);
 
   const fetchOrders = async () => {
-    const { data, error } = await supabase
+    // Fetch orders with order items
+    const { data: ordersData, error: ordersError } = await supabase
       .from("orders")
-      .select("*, order_items(*), profiles(*)")
+      .select("*, order_items(*)")
       .order("created_at", { ascending: false });
 
-    if (!error && data) {
-      setOrders(data);
+    if (ordersError || !ordersData) {
+      console.error("Error fetching orders:", ordersError);
+      return;
     }
+
+    // Fetch profiles for all unique user_ids
+    const userIds = [...new Set(ordersData.map((o) => o.user_id))];
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("*")
+      .in("id", userIds);
+
+    // Map profiles to orders
+    const profilesMap = new Map(profilesData?.map((p) => [p.id, p]) || []);
+    const ordersWithProfiles = ordersData.map((order) => ({
+      ...order,
+      profiles: profilesMap.get(order.user_id) || null,
+    }));
+
+    setOrders(ordersWithProfiles);
   };
 
   const filterOrders = (orders: any[]) => {
