@@ -19,20 +19,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
       if (session?.user) {
-        checkAdminStatus(session.user.id);
+        await checkAdminStatus(session.user.id);
       }
       setLoading(false);
-    });
+    };
+
+    initAuth();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        checkAdminStatus(session.user.id);
+        await checkAdminStatus(session.user.id);
       } else {
         setIsAdmin(false);
       }
