@@ -19,29 +19,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
+      
       setUser(session?.user ?? null);
       if (session?.user) {
-        await checkAdminStatus(session.user.id);
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", session.user.id)
+          .eq("role", "admin")
+          .maybeSingle();
+        
+        if (isMounted) {
+          setIsAdmin(!!data && !error);
+        }
       }
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+      }
     };
 
     initAuth();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Synchronous state updates only
       setUser(session?.user ?? null);
+      
       if (session?.user) {
-        await checkAdminStatus(session.user.id);
+        // Defer Supabase calls with setTimeout to prevent deadlock
+        setTimeout(() => {
+          supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", session.user.id)
+            .eq("role", "admin")
+            .maybeSingle()
+            .then(({ data, error }) => {
+              if (isMounted) {
+                setIsAdmin(!!data && !error);
+              }
+            });
+        }, 0);
       } else {
         setIsAdmin(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkAdminStatus = async (userId: string) => {
