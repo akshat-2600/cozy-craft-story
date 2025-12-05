@@ -35,10 +35,16 @@ export const PaymentScreenshotPreview = ({
       setError(null);
 
       try {
+        // Extract just the file path from the full URL if needed
+        let filePath = screenshotPath;
+        if (screenshotPath.includes("/payment-screenshots/")) {
+          filePath = screenshotPath.split("/payment-screenshots/").pop() || screenshotPath;
+        }
+
         // Generate a signed URL valid for 5 minutes
         const { data, error: signError } = await supabase.storage
           .from("payment-screenshots")
-          .createSignedUrl(screenshotPath, 300);
+          .createSignedUrl(filePath, 300);
 
         if (signError) {
           throw signError;
