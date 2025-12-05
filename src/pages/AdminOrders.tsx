@@ -30,6 +30,7 @@ import {
   XCircle,
   Eye,
   Truck,
+  Package,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -413,30 +414,44 @@ const AdminOrders = () => {
       <Tabs
         value={activeTab}
         onValueChange={(value) => setSearchParams({ tab: value })}
+        className="w-full"
       >
-        <TabsList className="mb-6">
-          <TabsTrigger value="all">All Orders</TabsTrigger>
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="approved">Approved</TabsTrigger>
-          <TabsTrigger value="rejected">Rejected</TabsTrigger>
-          <TabsTrigger value="completed">Completed</TabsTrigger>
+        <TabsList className="mb-6 flex-wrap">
+          <TabsTrigger value="all">All Orders ({orders.length})</TabsTrigger>
+          <TabsTrigger value="pending">
+            Pending ({orders.filter(o => ["payment_uploaded", "payment_verified"].includes(o.status)).length})
+          </TabsTrigger>
+          <TabsTrigger value="approved">
+            Approved ({orders.filter(o => ["approved", "processing", "shipped"].includes(o.status)).length})
+          </TabsTrigger>
+          <TabsTrigger value="rejected">
+            Rejected ({orders.filter(o => o.status === "rejected").length})
+          </TabsTrigger>
+          <TabsTrigger value="completed">
+            Completed ({orders.filter(o => o.status === "delivered").length})
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value={activeTab} className="space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center rounded-xl bg-card p-8 shadow-soft">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            </div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="rounded-xl bg-card p-8 text-center shadow-soft">
-              <p className="font-body text-muted-foreground">No orders found</p>
-            </div>
-          ) : (
-            filteredOrders.map((order) => (
-              <OrderCard key={order.id} order={order} />
-            ))
-          )}
-        </TabsContent>
+        {["all", "pending", "approved", "rejected", "completed"].map((tab) => (
+          <TabsContent key={tab} value={tab} className="space-y-4">
+            {loading ? (
+              <div className="flex items-center justify-center rounded-xl bg-card p-8 shadow-soft">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="rounded-xl bg-card p-8 text-center shadow-soft">
+                <Package className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <p className="font-body text-muted-foreground">No orders found in this category</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredOrders.map((order) => (
+                  <OrderCard key={order.id} order={order} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        ))}
       </Tabs>
 
       {/* Tracking Dialog */}
