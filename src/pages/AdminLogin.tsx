@@ -33,9 +33,11 @@ const AdminLogin = () => {
       
       // Wait a moment for auth state to update, then check admin status
       setTimeout(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
         const { data: roleData } = await supabase
           .from("user_roles")
           .select("role")
+          .eq("user_id", session?.user?.id)
           .eq("role", "admin")
           .maybeSingle();
 

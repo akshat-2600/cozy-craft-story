@@ -33,6 +33,7 @@ import {
   Package,
 } from "lucide-react";
 import { format } from "date-fns";
+import { PaymentScreenshotPreview } from "@/components/admin/PaymentScreenshotPreview";
 
 function getStatusColor(status: string) {
   const colors: Record<string, string> = {
@@ -531,44 +532,11 @@ const AdminOrders = () => {
       </Dialog>
 
       {/* PDF Preview Dialog */}
-      <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Payment Screenshot</DialogTitle>
-          </DialogHeader>
-          <div className="relative min-h-[60vh]">
-            {selectedOrder?.payment_screenshot_url && (
-              <>
-                {selectedOrder.payment_screenshot_url.toLowerCase().endsWith(".pdf") ? (
-                  <iframe
-                    src={selectedOrder.payment_screenshot_url}
-                    className="h-[60vh] w-full rounded-lg border"
-                    title="Payment Screenshot"
-                  />
-                ) : (
-                  <img
-                    src={selectedOrder.payment_screenshot_url}
-                    alt="Payment Screenshot"
-                    className="mx-auto max-h-[60vh] rounded-lg object-contain"
-                  />
-                )}
-                <div className="mt-4 flex justify-center">
-                  <a
-                    href={selectedOrder.payment_screenshot_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Button variant="outline">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Open in New Tab
-                    </Button>
-                  </a>
-                </div>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PaymentScreenshotPreview
+        open={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        screenshotPath={selectedOrder?.payment_screenshot_url}
+      />
     </AdminLayout>
   );
 };

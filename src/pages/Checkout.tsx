@@ -10,10 +10,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, QrCode } from "lucide-react";
+import { z } from "zod";
 
 function formatPrice(price: number): string {
   return `₹${price.toLocaleString("en-IN")}`;
 }
+
+// Input validation schema
+const checkoutSchema = z.object({
+  address: z.string().trim().min(5, "Address must be at least 5 characters").max(500, "Address too long"),
+  city: z.string().trim().min(2, "City must be at least 2 characters").max(100, "City name too long"),
+  zip: z.string().regex(/^[0-9]{6}$/, "Please enter a valid 6-digit PIN code"),
+  phone: z.string().regex(/^[6-9][0-9]{9}$/, "Please enter a valid 10-digit phone number"),
+});
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -28,6 +37,7 @@ const Checkout = () => {
     zip: "",
     phone: "",
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   if (!user) {
     navigate("/auth");
@@ -39,9 +49,34 @@ const Checkout = () => {
     return null;
   }
 
+  const validateForm = () => {
+    const result = checkoutSchema.safeParse(formData);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!validateForm()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the errors in the form.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!paymentFile) {
       toast({
         title: "Payment screenshot required",
@@ -51,33 +86,54 @@ const Checkout = () => {
       return;
     }
 
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(paymentFile.type)) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload a PDF or image file (JPG, PNG).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (paymentFile.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload a file smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Upload payment screenshot
+      // Upload payment screenshot - store in user-specific folder for RLS
       const fileExt = paymentFile.name.split(".").pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
         .from("payment-screenshots")
         .upload(fileName, paymentFile);
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("payment-screenshots")
-        .getPublicUrl(fileName);
+      // Store path reference (not public URL since bucket is now private)
+      const screenshotPath = fileName;
 
-      // Create order
+      // Create order with validated data
+      const validatedData = checkoutSchema.parse(formData);
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
           user_id: user.id,
-          shipping_address: formData.address,
-          shipping_city: formData.city,
-          shipping_zip: formData.zip,
-          shipping_phone: formData.phone,
+          shipping_address: validatedData.address,
+          shipping_city: validatedData.city,
+          shipping_zip: validatedData.zip,
+          shipping_phone: validatedData.phone,
           total_amount: totalPrice,
-          payment_screenshot_url: publicUrl,
+          payment_screenshot_url: screenshotPath,
           status: "payment_uploaded",
         })
         .select()
@@ -135,8 +191,10 @@ const Checkout = () => {
                       id="address"
                       value={formData.address}
                       onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      className={errors.address ? "border-destructive" : ""}
                       required
                     />
+                    {errors.address && <p className="mt-1 text-xs text-destructive">{errors.address}</p>}
                   </div>
                   <div>
                     <Label htmlFor="city">City</Label>
@@ -144,17 +202,23 @@ const Checkout = () => {
                       id="city"
                       value={formData.city}
                       onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      className={errors.city ? "border-destructive" : ""}
                       required
                     />
+                    {errors.city && <p className="mt-1 text-xs text-destructive">{errors.city}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="zip">ZIP Code</Label>
+                    <Label htmlFor="zip">PIN Code</Label>
                     <Input
                       id="zip"
                       value={formData.zip}
                       onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
+                      className={errors.zip ? "border-destructive" : ""}
+                      placeholder="6-digit PIN"
+                      maxLength={6}
                       required
                     />
+                    {errors.zip && <p className="mt-1 text-xs text-destructive">{errors.zip}</p>}
                   </div>
                   <div className="sm:col-span-2">
                     <Label htmlFor="phone">Phone Number</Label>
@@ -163,8 +227,12 @@ const Checkout = () => {
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className={errors.phone ? "border-destructive" : ""}
+                      placeholder="10-digit mobile number"
+                      maxLength={10}
                       required
                     />
+                    {errors.phone && <p className="mt-1 text-xs text-destructive">{errors.phone}</p>}
                   </div>
                 </div>
               </div>
@@ -183,7 +251,7 @@ const Checkout = () => {
                   </div>
                   <div className="mt-4 flex justify-center rounded-lg bg-background p-4">
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=example@upi&pn=COZY%20DECORS&am=${totalPrice}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=example@upi&pn=COZY DECORS&am=${totalPrice}`)}`}
                       alt="Payment QR Code"
                       className="h-48 w-48"
                     />
@@ -199,7 +267,7 @@ const Checkout = () => {
                     >
                       <Upload className="h-5 w-5 text-muted-foreground" />
                       <span className="font-body text-sm text-muted-foreground">
-                        {paymentFile ? paymentFile.name : "Click to upload"}
+                        {paymentFile ? paymentFile.name : "Click to upload (max 5MB)"}
                       </span>
                     </label>
                     <input
