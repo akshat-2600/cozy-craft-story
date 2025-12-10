@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -83,6 +84,7 @@ export default function ProductDetail() {
   const { productId } = useParams();
   const navigate = useNavigate();
   const { addItem } = useCart();
+  const { isInWishlist, toggleItem } = useWishlist();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -91,7 +93,6 @@ export default function ProductDetail() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const [newReview, setNewReview] = useState({ rating: 5, comment: "" });
@@ -482,10 +483,18 @@ export default function ProductDetail() {
                   <Button
                     size="lg"
                     variant="outline"
-                    onClick={() => setIsWishlisted(!isWishlisted)}
-                    className={cn(isWishlisted && "text-destructive border-destructive")}
+                    onClick={() => toggleItem({
+                      id: product.id,
+                      name: product.name,
+                      price: product.price,
+                      original_price: product.original_price,
+                      image_url: product.image_url || "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&h=500&fit=crop",
+                      category: product.category,
+                      rating: product.rating,
+                    })}
+                    className={cn(isInWishlist(product.id) && "text-destructive border-destructive")}
                   >
-                    <Heart className={cn("h-5 w-5", isWishlisted && "fill-destructive")} />
+                    <Heart className={cn("h-5 w-5", isInWishlist(product.id) && "fill-destructive")} />
                   </Button>
                 </div>
 

@@ -4,6 +4,7 @@ import { Menu, X, ShoppingBag, Search, User, Heart, LogOut, Settings } from "luc
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
@@ -24,6 +25,7 @@ const navLinks = [
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { totalItems } = useCart();
+  const { totalItems: wishlistItems } = useWishlist();
   const { user, isAdmin, signOut } = useAuth();
 
   const handleSignOut = async () => {
@@ -56,9 +58,16 @@ export function Navbar() {
 
           {/* Desktop Actions */}
           <div className="hidden lg:flex lg:items-center lg:gap-2">
-            <Button variant="ghost" size="icon" aria-label="Wishlist">
-              <Heart className="h-5 w-5" />
-            </Button>
+            <Link to="/wishlist">
+              <Button variant="ghost" size="icon" aria-label="Wishlist" className="relative">
+                <Heart className="h-5 w-5" />
+                {wishlistItems > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs text-destructive-foreground">
+                    {wishlistItems}
+                  </span>
+                )}
+              </Button>
+            </Link>
             <Link to="/cart">
               <Button variant="ghost" size="icon" aria-label="Cart" className="relative">
                 <ShoppingBag className="h-5 w-5" />
@@ -151,9 +160,16 @@ export function Navbar() {
               </Link>
             ))}
             <div className="mt-2 flex items-center gap-2 px-4">
-              <Button variant="ghost" size="icon" aria-label="Wishlist">
-                <Heart className="h-5 w-5" />
-              </Button>
+              <Link to="/wishlist" onClick={() => setIsOpen(false)}>
+                <Button variant="ghost" size="icon" aria-label="Wishlist" className="relative">
+                  <Heart className="h-5 w-5" />
+                  {wishlistItems > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] text-destructive-foreground">
+                      {wishlistItems}
+                    </span>
+                  )}
+                </Button>
+              </Link>
               {user ? (
                 <>
                   <Link to="/orders" onClick={() => setIsOpen(false)} className="ml-auto">

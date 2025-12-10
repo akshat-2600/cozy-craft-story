@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/contexts/WishlistContext";
 import { supabase } from "@/integrations/supabase/client";
 
 const categories = [
@@ -50,9 +51,9 @@ const Shop = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [wishlist, setWishlist] = useState<string[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const { addItem } = useCart();
+  const { isInWishlist, toggleItem } = useWishlist();
 
   const activeCategory = searchParams.get("category") || "all";
   const sortBy = searchParams.get("sort") || "featured";
@@ -82,8 +83,16 @@ const Shop = () => {
       }
     });
 
-  const toggleWishlist = (id: string) => {
-    setWishlist((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+  const handleToggleWishlist = (product: any) => {
+    toggleItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      original_price: product.original_price,
+      image_url: product.image_url || "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&h=500&fit=crop",
+      category: product.category,
+      rating: product.rating,
+    });
   };
 
   const handleAddToCart = (product: any) => {
@@ -227,10 +236,10 @@ const Shop = () => {
                         {product.original_price && <span className="rounded-full bg-destructive px-3 py-1 text-xs font-medium text-destructive-foreground">Sale</span>}
                       </div>
                       <button
-                        onClick={() => toggleWishlist(product.id)}
+                        onClick={() => handleToggleWishlist(product)}
                         className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-card/80 backdrop-blur-sm shadow-soft transition-all hover:bg-card hover:scale-110"
                       >
-                        <Heart className={cn("h-4 w-4 transition-colors", wishlist.includes(product.id) ? "fill-destructive text-destructive" : "text-muted-foreground")} />
+                        <Heart className={cn("h-4 w-4 transition-colors", isInWishlist(product.id) ? "fill-destructive text-destructive" : "text-muted-foreground")} />
                       </button>
                       <div className="absolute bottom-3 left-3 right-3 opacity-0 translate-y-4 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
                         <Button className="w-full" size="sm" onClick={() => handleAddToCart(product)}>
